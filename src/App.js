@@ -1,5 +1,7 @@
 import React, { Component } from 'react';
 import axios from 'axios';
+import { sortBy } from 'lodash';
+import classNames from 'classnames';
 import PropTypes from 'prop-types';
 import './App.css';
 
@@ -11,6 +13,14 @@ const PATH_SEARCH = '/search';
 const PARAM_SEARCH = 'query=';
 const PARAM_PAGE = 'page=';
 const PARAM_HPP = 'hitsPerPage=';
+
+const SORTS = {
+  NONE: list => list,
+  TITLE: list => sortBy(list, 'title'),
+  AUTHOR: list => sortBy(list, 'author'),
+  COMMENTS: list => sortBy(list, 'num_comments').reverse(),
+  POINTS: list => sortBy(list, 'points').reverse(),
+};
 
 class App extends Component {
   _isMounted = false;
@@ -24,6 +34,8 @@ class App extends Component {
       searchTerm: DEFAULT_QUERY,
       error: null,
       isLoading: false,
+      sortKey: 'NONE',
+      isSortReverse: false,
     };
 
     this.needsToSearchTopStories = this.needsToSearchTopStories.bind(this);
@@ -32,6 +44,12 @@ class App extends Component {
     this.onDismiss = this.onDismiss.bind(this);
     this.onSearchChange = this.onSearchChange.bind(this);
     this.onSearchSubmit = this.onSearchSubmit.bind(this);
+    this.onSort = this.onSort.bind(this);
+  }
+
+  onSort(sortKey) {
+    const isSortReverse = this.state.sortKey === sortKey && !this.state.isSortReverse;
+    this.setState({ sortKey, isSortReverse });
   }
 
   needsToSearchTopStories(searchTerm) {
@@ -109,7 +127,9 @@ class App extends Component {
       results,
       searchKey,
       error,
-      isLoading
+      isLoading,
+      sortKey,
+      isSortReverse
     } = this.state;
 
     const page = (
@@ -145,17 +165,18 @@ class App extends Component {
           </div>
         :  <Table
             list={list}
+            sortKey={sortKey}
+            isSortReverse={isSortReverse}
+            onSort={this.onSort}
             onDismiss={this.onDismiss}
           />
         }
         <div className='interactions'>
-          { isLoading
-            ? <Loading />
-            : <Button
-              onclick={() => this.fetchSearchTopStories(searchKey, page + 1)}>
+          <ButtonWithLoading
+            isLoading={isLoading}
+            onclick={() => this.fetchSearchTopStories(searchKey, page + 1)}>
               More
-              </Button>
-          }
+          </ButtonWithLoading>
         </div>
       </div>
     );
@@ -193,10 +214,62 @@ class Search extends Component {
   }
 }
 
-const Table = ({list, onDismiss}) => {
+const Table = ({
+  list,
+  sortKey,
+  isSortReverse,
+  onSort,
+  onDismiss
+}) => {
+  const sortedList = SORTS[sortKey](list);
+  const reverseSortedList = isSortReverse
+    ? sortedList.reverse()
+    : sortedList;
+
   return (
     <div className='table'>
-      {list.map(item => {
+      <div className='table-header'>
+        <span style={{ width: '40%' }}>
+          <Sort
+            sortKey={'TITLE'}
+            onSort={onSort}
+            activeSortKey={sortKey}
+          >
+            Title
+          </Sort>
+        </span>
+        <span style={{ width: '30%' }}>
+          <Sort
+            sortKey={'AUTHOR'}
+            onSort={onSort}
+            activeSortKey={sortKey}
+          >
+            Author
+          </Sort>
+        </span>
+        <span style={{ width: '10%' }}>
+          <Sort
+            sortKey={'COMMENTS'}
+            onSort={onSort}
+            activeSortKey={sortKey}
+          >
+            Comments
+          </Sort>
+        </span>
+        <span style={{ width: '10%' }}>
+          <Sort
+            sortKey={'POINTS'}
+            onSort={onSort}
+            activeSortKey={sortKey}
+          >
+            Points
+          </Sort>
+        </span>
+        <span style={{ width: '10%' }}>
+          Archive
+        </span>
+      </div>
+      {SORTS[sortKey](list).map(item => {
         return (
           <div key={item.objectID} className='table-row'>
             <span style={{ width: '40%' }}>
@@ -232,6 +305,33 @@ const Button = ({ onClick, className, children }) =>
 
 const Loading = () =>
   <div>Loading ...</div>
+
+const withLoading = (Component) => ({ isLoading, ...rest }) => isLoading
+  ? <Loading />
+  : <Component { ...rest } />
+
+const ButtonWithLoading = withLoading(Button);
+
+const Sort = ({
+  sortKey,
+  activeSortKey,
+  onSort,
+  children
+}) => {
+  const sortClass = classNames(
+    'button-inline',
+    { 'button-active': sortKey === activeSortKey}
+  );
+
+  return (
+    <Button
+      onClick={() => onSort(sortKey)}
+      className={sortClass}
+    >
+      {children}
+    </Button>
+  );
+};
 
 Button.defaultProps = {
   className: '',
